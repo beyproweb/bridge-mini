@@ -1,117 +1,52 @@
-// bridge-mini/server.js
+// Beypro Bridge (network-only, no native deps)
 const express = require("express");
-const bodyParser = require("body-parser");
 const cors = require("cors");
-
-const escpos = require("@node-escpos/core");
-const USB = require("@node-escpos/usb-adapter");
-const Network = require("@node-escpos/network-adapter");
-const Serial = require("@node-escpos/serialport-adapter");
-const { SerialPort } = require("serialport");
+const net = require("net");
+const os = require("os");
 
 const app = express();
 const PORT = process.env.PORT || 7777;
-
 app.use(cors());
-app.use(bodyParser.json({ limit: "1mb" }));
+app.use(express.json({ limit: "1mb" }));
 
-const toHex = n => (typeof n === "number" ? "0x" + n.toString(16).padStart(4, "0") : null);
-const parseHex = h => {
-  if (typeof h === "number") return h;
-  if (typeof h !== "string") return null;
-  const s = h.replace(/^0x/i, "");
-  const v = parseInt(s, 16);
-  return Number.isFinite(v) ? v : null;
-};
-const cleanErr = e => (e && (e.message || String(e))) || "unknown";
+function ok(res, data = {}) { res.json({ ok: true, ...data }); }
+function bad(res, code, err) { res.status(code).json({ ok: false, error: String(err) }); }
 
-// Health
-app.get("/status", (req, res) => res.json({ ok: true, ts: Date.now() }));
-
-// List printers (USB + Serial)
-app.get("/printers", async (req, res) => {
-  const out = { usb: [], serial: [], tips: [] };
-
-  // USB
-  try {
-    const list = USB.findPrinter?.() || [];
-    out.usb = list.map(p => ({
-      vendorId: toHex(p?.deviceDescriptor?.idVendor),
-      productId: toHex(p?.deviceDescriptor?.idProduct),
-    }));
-    if (out.usb.length === 0) out.tips.push("No USB printers detected.");
-  } catch (e) {
-    out.tips.push("USB list error: " + cleanErr(e));
-  }
-
-  // Serial
-  try {
-    const ports = await SerialPort.list();
-    out.serial = ports.map(p => ({
-      path: p.path,
-      friendlyName: p.friendlyName || "",
-      manufacturer: p.manufacturer || "",
-    }));
-  } catch (e) {
-    out.tips.push("Serial list error: " + cleanErr(e));
-  }
-
-  res.json(out);
+app.get("/ping", (_req, res) => {
+  ok(res, {
+    version: "1.1.0",
+    platform: `${os.platform()}-${os.arch()}`,
+    usb: false // no USB in this build (pure network)
+  });
 });
 
-// Print text (usb | serial | network)
-app.post("/print", async (req, res) => {
-  const {
-    interface: iface,
-    vendorId,
-    productId,
-    path,
-    baudRate = 9600,
-    host,
-    port = 9100,
-    content = "",
-    encoding = "cp857", // Turkish-friendly default
-    cut = true,
-    cashdraw = false,
-    align = "lt",
-  } = req.body || {};
-
-  if (!content || typeof content !== "string")
-    return res.status(400).json({ ok: false, error: "Missing 'content' string." });
-
-  let device;
+// POST /print  { host: "192.168.1.50", port: 9100, dataBase64: "<escpos-bytes>" }
+app.post("/print", (req, res) => {
   try {
-    if (iface === "usb") {
-      const vid = parseHex(vendorId);
-      const pid = parseHex(productId);
-      if (vid == null || pid == null) throw new Error("Provide vendorId/productId like '0x04b8'/'0x0e15'.");
-      device = new USB(vid, pid);
-    } else if (iface === "serial") {
-      if (!path) throw new Error("Provide serial 'path' (e.g., /dev/ttyUSB0 or COM3).");
-      device = new Serial(path, { baudRate });
-    } else if (iface === "network") {
-      if (!host) throw new Error("Provide network 'host' (printer IP).");
-      device = new Network(host, port);
-    } else {
-      throw new Error("Unsupported interface. Use usb | serial | network.");
-    }
+    const { host, port = 9100, dataBase64 } = req.body || {};
+    if (!host || !dataBase64) return bad(res, 400, "host and dataBase64 required");
+    const payload = Buffer.from(dataBase64, "base64");
 
-    device.open(err => {
-      if (err) return res.status(500).json({ ok: false, error: "open failed: " + cleanErr(err) });
-      try {
-        const printer = new escpos.Printer(device, { encoding });
-        printer.align(align).style("a").size(1, 1).text(content.endsWith("\n") ? content : content + "\n");
-        if (cashdraw) printer.cashdraw(2);
-        if (cut) printer.cut();
-        printer.close();
-        return res.json({ ok: true });
-      } catch (e) {
-        return res.status(500).json({ ok: false, error: "print error: " + cleanErr(e) });
-      }
-    });
+    const sock = new net.Socket();
+    let replied = false;
+    const finish = (status, msg) => {
+      if (replied) return;
+      replied = true;
+      if (status === 200) ok(res);
+      else bad(res, status, msg);
+    };
+
+    sock.setTimeout(8000);
+    sock.once("connect", () => sock.write(payload));
+    sock.once("error", (e) => finish(502, e.message || e));
+    sock.once("timeout", () => { sock.destroy(); finish(504, "Printer timeout"); });
+    sock.once("close", (hadErr) => finish(hadErr ? 502 : 200, hadErr ? "Socket closed with error" : "OK"));
+    sock.connect(port, host);
   } catch (e) {
-    return res.status(400).json({ ok: false, error: cleanErr(e) });
+    bad(res, 500, e);
   }
 });
 
-app.listen(PORT, () => console.log(`🖨️ Beypro Bridge (@node-escpos) on http://127.0.0.1:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🖨️ Beypro Bridge listening at http://127.0.0.1:${PORT}`);
+});

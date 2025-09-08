@@ -1,27 +1,21 @@
 {
   "name": "beypro-bridge",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "private": true,
-  "bin": { "bridge": "./server.js" },
   "type": "commonjs",
- "scripts": {
-  "start": "node server.js",
-  "pkg:win": "pkg . --targets node18-win-x64 --output dist/bridge-win-x64",
-  "pkg:mac-arm": "pkg . --targets node18-macos-arm64 --output dist/bridge-macos-arm64",
-  "pkg:mac-x64": "pkg . --targets node18-macos-x64 --output dist/bridge-macos-x64",
-  "pkg:linux": "pkg . --targets node18-linux-x64 --output dist/bridge-linux-x64",
-  "build-all": "npm run pkg:win && npm run pkg:mac-arm && npm run pkg:mac-x64 && npm run pkg:linux && node build-archives.js"
-},
-
+  "bin": { "bridge": "./server.js" },
+  "scripts": {
+    "start": "node server.js",
+    "pkg:win": "pkg . --targets node18-win-x64 --output dist/beypro-bridge-win-x64.exe",
+    "pkg:mac-arm": "pkg . --targets node18-macos-arm64 --output dist/beypro-bridge-macos-arm64",
+    "pkg:mac-x64": "pkg . --targets node18-macos-x64 --output dist/beypro-bridge-macos-x64",
+    "pkg:linux": "pkg . --targets node18-linux-x64 --output dist/beypro-bridge-linux-x64",
+    "build-archives": "node build-archives.js",
+    "build-all": "npm run pkg:win && npm run pkg:mac-arm && npm run pkg:mac-x64 && npm run pkg:linux && npm run build-archives"
+  },
   "dependencies": {
-    "@node-escpos/core": "^0.6.0",
-    "@node-escpos/usb-adapter": "^0.3.1",
-    "@node-escpos/serialport-adapter": "^1.0.0",
-    "@node-escpos/network-adapter": "^0.0.1",
-    "body-parser": "^1.20.3",
-    "cors": "^2.8.5",
     "express": "^4.19.2",
-    "serialport": "^12.0.0"
+    "cors": "^2.8.5"
   },
   "devDependencies": {
     "pkg": "^5.8.1"
