@@ -7,50 +7,7 @@ const path = require("path");
 const iconv = require("iconv-lite");
 // If you ever see missing legacy encodings, uncomment the next line:
 const fs = require("fs");
-const { execFile } = require("child_process");
 
-// List Windows printers (friendly names)
-app.get("/win/printers", (req, res) => {
-  if (process.platform !== "win32") return res.json({ ok: true, printers: [] });
-  const ps = 'Get-Printer | Select-Object Name,DriverName,PortName,ComputerName,Default | ConvertTo-Json -Depth 2';
-  execFile("powershell.exe", ["-NoProfile", "-Command", ps], { windowsHide: true }, (err, stdout, stderr) => {
-    if (err) return res.status(500).json({ ok: false, error: stderr || err.message });
-    let data;
-    try { data = JSON.parse(stdout); } catch {
-      return res.json({ ok: true, printers: [], raw: stdout });
-    }
-    const arr = Array.isArray(data) ? data : [data];
-    const printers = arr.map(p => ({
-      name: p.Name,
-      driver: p.DriverName,
-      port: p.PortName,
-      computer: p.ComputerName || "",
-      isDefault: !!p.Default,
-    }));
-    res.json({ ok: true, printers });
-  });
-});
-
-// (Optional) Print RAW via Windows spooler
-// npm i printer  (or "npm i @thiagoelg/node-printer") in your bridge project
-let printerLib = null;
-try { printerLib = require("printer"); } catch {}
-app.post("/win/print-raw", (req, res) => {
-  if (process.platform !== "win32") return res.status(400).json({ ok:false, error:"Not Windows" });
-  if (!printerLib) return res.status(500).json({ ok:false, error:"'printer' module not installed in bridge" });
-
-  const { printerName, dataBase64 } = req.body || {};
-  if (!printerName || !dataBase64) return res.status(400).json({ ok:false, error:"Missing printerName/dataBase64" });
-
-  const buf = Buffer.from(dataBase64, "base64");
-  printerLib.printDirect({
-    data: buf,
-    printer: printerName,
-    type: "RAW",
-    success: () => res.json({ ok: true }),
-    error: (err) => res.status(500).json({ ok:false, error: err?.message || String(err) })
-  });
-});
 
 if (process.pkg) {
   const plat = process.platform;  // 'win32' | 'darwin' | 'linux'
@@ -242,6 +199,49 @@ app.post("/print", async (req, res) => {
   } catch (e) {
     bad(res, 500, e);
   }
+});
+
+// List Windows printers (friendly names)
+app.get("/win/printers", (req, res) => {
+  if (process.platform !== "win32") return res.json({ ok: true, printers: [] });
+  const ps = 'Get-Printer | Select-Object Name,DriverName,PortName,ComputerName,Default | ConvertTo-Json -Depth 2';
+  execFile("powershell.exe", ["-NoProfile", "-Command", ps], { windowsHide: true }, (err, stdout, stderr) => {
+    if (err) return res.status(500).json({ ok: false, error: stderr || err.message });
+    let data;
+    try { data = JSON.parse(stdout); } catch {
+      return res.json({ ok: true, printers: [], raw: stdout });
+    }
+    const arr = Array.isArray(data) ? data : [data];
+    const printers = arr.map(p => ({
+      name: p.Name,
+      driver: p.DriverName,
+      port: p.PortName,
+      computer: p.ComputerName || "",
+      isDefault: !!p.Default,
+    }));
+    res.json({ ok: true, printers });
+  });
+});
+
+// (Optional) Print RAW via Windows spooler
+// npm i printer  (or "npm i @thiagoelg/node-printer") in your bridge project
+let printerLib = null;
+try { printerLib = require("printer"); } catch {}
+app.post("/win/print-raw", (req, res) => {
+  if (process.platform !== "win32") return res.status(400).json({ ok:false, error:"Not Windows" });
+  if (!printerLib) return res.status(500).json({ ok:false, error:"'printer' module not installed in bridge" });
+
+  const { printerName, dataBase64 } = req.body || {};
+  if (!printerName || !dataBase64) return res.status(400).json({ ok:false, error:"Missing printerName/dataBase64" });
+
+  const buf = Buffer.from(dataBase64, "base64");
+  printerLib.printDirect({
+    data: buf,
+    printer: printerName,
+    type: "RAW",
+    success: () => res.json({ ok: true }),
+    error: (err) => res.status(500).json({ ok:false, error: err?.message || String(err) })
+  });
 });
 
 app.listen(PORT, () => {
