@@ -1,21 +1,30 @@
 {
   "name": "beypro-bridge",
-  "version": "1.1.0",
+  "version": "1.2.2",
   "private": true,
   "type": "commonjs",
-  "bin": { "bridge": "./server.js" },
+  "bin": {
+    "bridge": "./server.js"
+  },
   "scripts": {
     "start": "node server.js",
     "pkg:win": "pkg . --targets node18-win-x64 --output dist/beypro-bridge-win-x64.exe",
     "pkg:mac-arm": "pkg . --targets node18-macos-arm64 --output dist/beypro-bridge-macos-arm64",
     "pkg:mac-x64": "pkg . --targets node18-macos-x64 --output dist/beypro-bridge-macos-x64",
     "pkg:linux": "pkg . --targets node18-linux-x64 --output dist/beypro-bridge-linux-x64",
+    "pack:win-usb-service": "npm run pkg:win && node -e \"const fs=require('fs');fs.rmSync('dist/win',{recursive:true,force:true});fs.mkdirSync('dist/win/prebuilds/win32-x64',{recursive:true});fs.cpSync('node_modules/@serialport/bindings-cpp/prebuilds/win32-x64','dist/win/prebuilds/win32-x64',{recursive:true});fs.copyFileSync('dist/beypro-bridge-win-x64.exe','dist/win/beypro-bridge-win-x64.exe');fs.cpSync('pack/win','dist/win',{recursive:true});fs.mkdirSync('out',{recursive:true});\" && bash -lc \"cd dist/win && zip -r ../../out/beypro-bridge-win-x64.zip . && echo '✅ out/beypro-bridge-win-x64.zip ready'\"",
+    "pack:mac-usb-x64-agent": "npm run pkg:mac-x64 && node -e \"const fs=require('fs'),p=require('path');fs.rmSync('dist/mac-x64',{recursive:true,force:true});const base='node_modules/@serialport/bindings-cpp/prebuilds';const dst='dist/mac-x64/prebuilds/darwin-x64';fs.mkdirSync(dst,{recursive:true});const cand=[p.join(base,'darwin-x64'),p.join(base,'darwin-x64+arm64')];const src=cand.find(d=>fs.existsSync(d));if(!src)throw new Error('No darwin prebuild found under '+base);fs.cpSync(src,dst,{recursive:true});fs.copyFileSync('dist/beypro-bridge-macos-x64','dist/mac-x64/beypro-bridge-macos-x64');fs.cpSync('pack/mac-x64','dist/mac-x64',{recursive:true});fs.chmodSync('dist/mac-x64/Install-BeyproBridge.command',0o755);fs.chmodSync('dist/mac-x64/Uninstall-BeyproBridge.command',0o755);fs.mkdirSync('out',{recursive:true});\" && bash -lc \"cd dist/mac-x64 && tar -czf ../../out/beypro-bridge-mac-x64.tar.gz . && echo '✅ out/beypro-bridge-mac-x64.tar.gz ready'\"",
+    "pack:mac-usb-arm-agent": "npm run pkg:mac-arm && node -e \"const fs=require('fs'),p=require('path');fs.rmSync('dist/mac-arm',{recursive:true,force:true});const base='node_modules/@serialport/bindings-cpp/prebuilds';const dst='dist/mac-arm/prebuilds/darwin-arm64';fs.mkdirSync(dst,{recursive:true});const cand=[p.join(base,'darwin-arm64'),p.join(base,'darwin-x64+arm64')];const src=cand.find(d=>fs.existsSync(d));if(!src)throw new Error('No darwin prebuild found under '+base);fs.cpSync(src,dst,{recursive:true});fs.copyFileSync('dist/beypro-bridge-macos-arm64','dist/mac-arm/beypro-bridge-macos-arm64');fs.cpSync('pack/mac-arm64','dist/mac-arm',{recursive:true});fs.chmodSync('dist/mac-arm/Install-BeyproBridge.command',0o755);fs.chmodSync('dist/mac-arm/Uninstall-BeyproBridge.command',0o755);fs.mkdirSync('out',{recursive:true});\" && bash -lc \"cd dist/mac-arm && tar -czf ../../out/beypro-bridge-mac-arm64.tar.gz . && echo '✅ out/beypro-bridge-mac-arm64.tar.gz ready'\"",
+    "pack:linux-usb-x64-user": "npm run pkg:linux && node -e \"const fs=require('fs');fs.rmSync('dist/linux-x64',{recursive:true,force:true});fs.mkdirSync('dist/linux-x64/prebuilds/linux-x64',{recursive:true});fs.cpSync('node_modules/@serialport/bindings-cpp/prebuilds/linux-x64','dist/linux-x64/prebuilds/linux-x64',{recursive:true});fs.copyFileSync('dist/beypro-bridge-linux-x64','dist/linux-x64/beypro-bridge-linux-x64');fs.cpSync('pack/linux-x64','dist/linux-x64',{recursive:true});fs.chmodSync('dist/linux-x64/install-linux.sh',0o755);fs.chmodSync('dist/linux-x64/uninstall-linux.sh',0o755);fs.mkdirSync('out',{recursive:true});\" && bash -lc \"cd dist/linux-x64 && tar -czf ../../out/beypro-bridge-linux-x64.tar.gz . && echo '✅ out/beypro-bridge-linux-x64.tar.gz ready'\"",
+    "pack:all-usb": "npm run pack:win-usb-service && npm run pack:mac-usb-x64-agent && npm run pack:mac-usb-arm-agent && npm run pack:linux-usb-x64-user",
     "build-archives": "node build-archives.js",
     "build-all": "npm run pkg:win && npm run pkg:mac-arm && npm run pkg:mac-x64 && npm run pkg:linux && npm run build-archives"
   },
   "dependencies": {
+    "cors": "^2.8.5",
     "express": "^4.19.2",
-    "cors": "^2.8.5"
+    "iconv-lite": "^0.6.3",
+    "serialport": "^12.0.0"
   },
   "devDependencies": {
     "pkg": "^5.8.1"
